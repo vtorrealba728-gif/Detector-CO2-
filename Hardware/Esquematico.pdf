@@ -1,0 +1,156 @@
+{
+  "version": 1,
+  "author": "Alonso Beltran",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-breadboard-half", "id": "bb1", "top": -252.6, "left": -26, "attrs": {} },
+    { "type": "wokwi-arduino-uno", "id": "uno", "top": 0, "left": 0, "attrs": {} },
+    {
+      "type": "wokwi-lcd2004",
+      "id": "lcd1",
+      "top": -118.4,
+      "left": 351.2,
+      "attrs": { "pins": "i2c" }
+    },
+    { "type": "wokwi-gas-sensor", "id": "gas1", "top": -150.9, "left": -60.2, "attrs": {} }
+  ],
+  "connections": [
+    [ "lcd1:SCL", "uno:A5", "green", [ "h38.4", "v249.4" ] ],
+    [ "lcd1:SDA", "uno:A4", "green", [ "h28.8", "v258.9" ] ],
+    [ "gas1:AOUT", "bb1:9b.f", "", [ "$bb" ] ],
+    [ "gas1:DOUT", "bb1:9b.g", "", [ "$bb" ] ],
+    [ "gas1:GND", "bb1:9b.h", "", [ "$bb" ] ],
+    [ "gas1:VCC", "bb1:9b.i", "", [ "$bb" ] ],
+    [ "gas1:AOUT", "uno:A0", "green", [ "h0" ] ],
+    [ "gas1:DOUT", "uno:2", "green", [ "h0" ] ],
+    [ "lcd1:VCC", "bb1:bp.2", "red", [ "h0" ] ],
+    [ "lcd1:GND", "bb1:bn.2", "black", [ "v57.6", "h-337.6" ] ],
+    [ "bb1:10b.h", "bb1:bn.8", "green", [ "v0" ] ],
+    [ "bb1:bp.7", "bb1:10b.i", "green", [ "v0" ] ],
+    [ "bb1:bp.1", "uno:5V", "green", [ "h-65.6", "v257.8" ] ],
+    [ "uno:GND.2", "bb1:bn.1", "black", [ "h-179.1", "v-247.8" ] ]
+  ],
+  "dependencies": {}
+}
+# Wokwi Library List
+# See https://docs.wokwi.com/guides/libraries
+
+# Automatically added based on includes:
+LiquidCrystal I2C
+
+
+/*
+ * ============================================================
+ *  Sensor C02 - WOKWI
+ *  Placa  : Arduino UNO
+ *  Sensor : MQ Gas Sensor / MQ-135 / MQ-2 - salida analogica A0
+ *  Display: LCD 16x2 I2C
+ * ============================================================
+ */
+
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+// LCD I2C en direccion 0x27, 16 columnas x 2 filas
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+// Pines
+const int PIN_SENSOR_MQ = A0;
+
+// Constantes
+const int LCD_COLS      = 16;
+const int LCD_ROWS      = 2;
+const int WARMUP_SEG    = 60;
+const int INTERVALO_SEG = 10;
+
+// Umbral simulado para Wokwi
+// El sensor MQ entrega valores analogicos entre 0 y 1023
+// Aqui convertimos ese valor a "ppm simulados"
+const int UMBRAL_PPM = 1000;
+
+// Prototipos
+int leerCO2Simulado();
+void mostrarCalentamiento(int segundosRestantes);
+void mostrarCO2(int ppm);
+
+void setup() {
+  Serial.begin(9600);
+
+  lcd.init();
+  lcd.backlight();
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Modulo CO2");
+  lcd.setCursor(0, 1);
+  lcd.print("Iniciando...");
+  delay(1000);
+
+  Serial.println("============================================");
+  Serial.println("  MODULO DE VENTILACION AUTOMATIZADO");
+  Serial.println("  Version Wokwi con sensor MQ");
+  Serial.println("============================================");
+
+  for (int s = WARMUP_SEG; s > 0; s--) {
+    mostrarCalentamiento(s);
+    Serial.print("Calentamiento restante: ");
+    Serial.print(s);
+    Serial.println(" s");
+    delay(1000);
+  }
+
+  lcd.clear();
+  Serial.println("Sensor listo. Iniciando lecturas.");
+  Serial.println("--------------------------------------------");
+}
+
+void loop() {
+  int ppm = leerCO2Simulado();
+
+  mostrarCO2(ppm);
+
+  delay((long)INTERVALO_SEG * 1000UL);
+}
+
+int leerCO2Simulado() {
+  int lecturaAnalogica = analogRead(PIN_SENSOR_MQ);
+
+  // ConversiÃģn simulada:
+  // 0 a 1023 del sensor MQ se transforma a 400 a 2000 ppm aprox.
+  int ppm = map(lecturaAnalogica, 0, 1023, 400, 2000);
+
+  Serial.print("Lectura MQ A0: ");
+  Serial.print(lecturaAnalogica);
+  Serial.print(" | CO2 simulado: ");
+  Serial.print(ppm);
+  Serial.println(" ppm");
+  Serial.println("--------------------------------------------");
+
+  return ppm;
+}
+
+void mostrarCalentamiento(int seg) {
+  lcd.setCursor(0, 0);
+  lcd.print("Modulo CO2      ");
+  lcd.setCursor(0, 1);
+  lcd.print("Espere: ");
+  lcd.print(seg);
+  lcd.print("s       ");
+}
+
+void mostrarCO2(int ppm) {
+  lcd.setCursor(0, 0);
+  lcd.print("CO2: ");
+  lcd.print(ppm);
+  lcd.print(" ppm   ");
+
+  lcd.setCursor(0, 1);
+  if (ppm < UMBRAL_PPM) {
+    lcd.print("Aire normal     ");
+  } else {
+    lcd.print("Ventilar sala   ");
+  }
+} 
+Downloaded from https://wokwi.com/projects/467770724501932033
+
+Simulate this project on https://wokwi.com
