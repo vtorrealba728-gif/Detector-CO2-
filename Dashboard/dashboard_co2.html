@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monitor CO2 · Panel en vivo</title>
+<style>
+  :root{
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-2: #1c2330;
+    --border: #2a3140;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --verde: #3fb950;
+    --ambar: #d29922;
+    --naranja: #db6d28;
+    --rojo: #f85149;
+    --azul: #58a6ff;
+  }
+  *{ box-sizing: border-box; }
+  html, body{
+    margin:0; padding:0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, system-ui, sans-serif;
+    min-height: 100vh;
+  }
+  .mono{ font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace; }
+
+  .wrap{
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 28px 20px 60px;
+  }
+
+  header{
+    display:flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+  }
+  .titulo-grupo .eyebrow{
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin: 0 0 6px;
+  }
+  .titulo-grupo h1{
+    margin: 0;
+    font-size: 22px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+  }
+
+  .config-grupo{
+    display:flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-end;
+  }
+  .ip-config{
+    display:flex;
+    align-items:center;
+    gap: 8px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 10px;
+  }
+  .ip-config label{
+    font-size: 11px;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .ip-config input{
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    width: 130px;
+  }
+  .ip-config button{
+    background: var(--azul);
+    color: #04101f;
+    border: none;
+    border-radius: 6px;
+    padding: 7px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .ip-config button:hover{ filter: brightness(1.08); }
+
+  .estado-conexion{
+    display:flex;
+    align-items:center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--text-dim);
+    margin-bottom: 22px;
+  }
+  .punto{
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    box-shadow: 0 0 0 0 rgba(0,0,0,0);
+    transition: background 0.2s;
+  }
+  .punto.viva{
+    background: var(--verde);
+    animation: pulso 1.4s ease-out;
+  }
+  .punto.caida{ background: var(--rojo); }
+  @keyframes pulso{
+    0%{ box-shadow: 0 0 0 0 rgba(63,185,80,0.55); }
+    70%{ box-shadow: 0 0 0 9px rgba(63,185,80,0); }
+    100%{ box-shadow: 0 0 0 0 rgba(63,185,80,0); }
+  }
+
+  .panel-hero{
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    display:grid;
+    grid-template-columns: 1fr auto;
+    gap: 24px;
+    align-items: center;
+    margin-bottom: 18px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero-izq .etiqueta-nivel{
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    display:inline-block;
+    margin-bottom: 14px;
+  }
+  .valor-ppm{
+    font-size: 84px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+  .valor-ppm .unidad{
+    font-size: 22px;
+    color: var(--text-dim);
+    font-weight: 500;
+    margin-left: 8px;
+  }
+  .mensaje-nivel{
+    margin-top: 10px;
+    font-size: 14px;
+    color: var(--text-dim);
+  }
+  .gauge-wrap{
+    width: 150px;
+    text-align: center;
+  }
+  .gauge-svg{ width: 150px; height: 150px; }
+  .gauge-num{
+    font-size: 26px;
+    font-weight: 700;
+  }
+
+  .escala-row{
+    margin-top: 18px;
+  }
+  .escala-barra{
+    height: 8px;
+    border-radius: 6px;
+    background: linear-gradient(90deg, var(--verde) 0%, var(--verde) 22%, var(--ambar) 38%, var(--naranja) 56%, var(--rojo) 100%);
+    position: relative;
+  }
+  .escala-marca{
+    position:absolute;
+    top: -3px;
+    width: 2px;
+    height: 14px;
+    background: #fff;
+    border-radius: 2px;
+    transition: left 0.4s ease;
+  }
+  .escala-labels{
+    display:flex;
+    justify-content: space-between;
+    font-size: 10.5px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  .panel-grafico{
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px 22px;
+    margin-bottom: 18px;
+  }
+  .panel-grafico h2{
+    margin: 0 0 14px;
+    font-size: 14px;
+    color: var(--text-dim);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  #grafico{ width: 100%; height: 180px; display:block; }
+
+  .panel-prueba{
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 22px;
+  }
+  .prueba-top{
+    display:flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .prueba-top h2{
+    margin: 0 0 4px;
+    font-size: 15px;
+    font-weight: 650;
+  }
+  .prueba-top p{
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--text-dim);
+  }
+  .btn-prueba{
+    background: var(--verde);
+    color: #04140a;
+    border: none;
+    border-radius: 10px;
+    padding: 12px 18px;
+    font-size: 13.5px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn-prueba:hover{ filter: brightness(1.07); }
+  .btn-prueba.detener{ background: var(--rojo); color: #190707; }
+  .btn-prueba:disabled{ opacity: 0.5; cursor: not-allowed; }
+
+  .prueba-progreso{
+    margin-top: 18px;
+    display: none;
+  }
+  .prueba-progreso.activa{ display:block; }
+  .progreso-info{
+    display:flex;
+    justify-content: space-between;
+    font-size: 12.5px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+  }
+  .progreso-info span.num{ color: var(--text); font-family: 'JetBrains Mono', monospace; }
+  .barra-progreso{
+    height: 10px;
+    background: var(--panel-2);
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .barra-progreso-fill{
+    height: 100%;
+    background: var(--azul);
+    width: 0%;
+    transition: width 0.3s ease;
+  }
+
+  .resultados{
+    margin-top: 22px;
+    display: none;
+  }
+  .resultados.activa{ display:block; }
+  .resultados h3{
+    margin: 0 0 12px;
+    font-size: 13px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .metricas-grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .metrica{
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .metrica .label{
+    font-size: 10.5px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+  }
+  .metrica .num{
+    font-size: 21px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .metrica .sub{
+    font-size: 10.5px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+
+  .distribucion{
+    margin-top: 4px;
+  }
+  .dist-fila{
+    display:flex;
+    align-items:center;
+    gap: 10px;
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+  .dist-fila .et{
+    width: 92px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+  }
+  .dist-fila .barra-mini{
+    flex: 1;
+    height: 8px;
+    background: var(--panel-2);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .dist-fila .barra-mini-fill{
+    height: 100%;
+  }
+  .dist-fila .pct{
+    width: 42px;
+    text-align: right;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text);
+    flex-shrink: 0;
+  }
+
+  .acciones-export{
+    margin-top: 16px;
+    display:flex;
+    gap: 10px;
+  }
+  .btn-secundario{
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 9px 14px;
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+  .btn-secundario:hover{ border-color: var(--azul); }
+
+  .nota-error{
+    background: rgba(248,81,73,0.1);
+    border: 1px solid rgba(248,81,73,0.35);
+    color: #ffb4ae;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 12.5px;
+    margin-bottom: 18px;
+    display: none;
+  }
+  .nota-error.activa{ display:block; }
+
+  @media (max-width: 560px){
+    .panel-hero{ grid-template-columns: 1fr; }
+    .gauge-wrap{ margin: 0 auto; }
+    .valor-ppm{ font-size: 64px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="titulo-grupo">
+      <p class="eyebrow">Sensor MH-Z1911A · Arduino UNO R4 WiFi</p>
+      <h1>Monitor de CO2</h1>
+    </div>
+    <div class="config-grupo">
+      <div class="ip-config">
+        <label for="inputIp">IP del Arduino</label>
+        <input type="text" id="inputIp" placeholder="192.168.1.50" class="mono">
+        <button id="btnConectar">Conectar</button>
+      </div>
+      <div class="ip-config">
+        <label for="inputIntervalo">Muestreo cada</label>
+        <input type="number" id="inputIntervalo" value="30" min="5" max="600" step="1" class="mono" style="width:60px">
+        <span style="font-size:12px; color:var(--text-dim)">seg</span>
+        <button id="btnAplicarIntervalo">Aplicar</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="estado-conexion" id="estadoIntervalo" style="display:none">
+    <span id="textoIntervalo"></span>
+  </div>
+
+  <div class="estado-conexion">
+    <span class="punto" id="puntoEstado"></span>
+    <span id="textoEstado">Sin conexión. Ingresa la IP del Arduino y presiona Conectar.</span>
+  </div>
+
+  <div class="nota-error" id="notaError"></div>
+
+  <div class="panel-hero">
+    <div class="hero-izq">
+      <span class="etiqueta-nivel" id="etiquetaNivel">SIN DATOS</span>
+      <div class="valor-ppm mono">
+        <span id="valorPpm">—</span><span class="unidad">ppm</span>
+      </div>
+      <div class="mensaje-nivel" id="mensajeNivel">Esperando primera lectura del sensor…</div>
+
+      <div class="escala-row">
+        <div class="escala-barra">
+          <div class="escala-marca" id="escalaMarca" style="left:0%"></div>
+        </div>
+        <div class="escala-labels">
+          <span>400</span><span>800</span><span>1000</span><span>1500</span><span>2000</span><span>5000+</span>
+        </div>
+      </div>
+    </div>
+    <div class="gauge-wrap">
+      <svg class="gauge-svg" viewBox="0 0 150 150">
+        <circle cx="75" cy="75" r="62" fill="none" stroke="#2a3140" stroke-width="12"/>
+        <circle id="gaugeCirculo" cx="75" cy="75" r="62" fill="none" stroke="#3fb950"
+                stroke-width="12" stroke-linecap="round"
+                stroke-dasharray="389.6" stroke-dashoffset="389.6"
+                transform="rotate(-90 75 75)"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="panel-grafico">
+    <h2>Histórico reciente</h2>
+    <svg id="grafico" viewBox="0 0 880 180" preserveAspectRatio="none"></svg>
+  </div>
+
+  <div class="panel-prueba">
+    <div class="prueba-top">
+      <div>
+        <h2>Prueba de calidad de aire (1 hora)</h2>
+        <p>Muestreo cada 30 segundos durante 60 minutos. Calcula métricas al finalizar.</p>
+      </div>
+      <button class="btn-prueba" id="btnPrueba">Iniciar prueba de 1 hora</button>
+    </div>
+
+    <div class="prueba-progreso" id="bloqueProgreso">
+      <div class="progreso-info">
+        <span>Muestra <span class="num" id="muestraActual">0</span> / <span class="num">120</span></span>
+        <span>Tiempo restante: <span class="num" id="tiempoRestante">60:00</span></span>
+      </div>
+      <div class="barra-progreso">
+        <div class="barra-progreso-fill" id="barraFill"></div>
+      </div>
+    </div>
+
+    <div class="resultados" id="bloqueResultados">
+      <h3>Resultados de la prueba</h3>
+      <div class="aviso-csv" id="avisoCsv" style="font-size:12.5px; color:var(--verde); margin-bottom:14px;">
+        ✓ El CSV de esta prueba se descargó automáticamente a tu carpeta de descargas.
+      </div>
+      <div class="metricas-grid" id="metricasGrid"></div>
+
+      <div class="distribucion" id="bloqueDistribucion">
+        <h3>Distribución del tiempo por categoría</h3>
+        <div id="distribucionFilas"></div>
+      </div>
+
+      <div class="acciones-export">
+        <button class="btn-secundario" id="btnExportar">Exportar CSV</button>
+        <button class="btn-secundario" id="btnNuevaPrueba">Nueva prueba</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ============================================================
+// CONFIGURACIÓN Y ESTADO
+// ============================================================
+const DURACION_PRUEBA_MS = 60 * 60 * 1000; // 1 hora, fija
+const INTERVALO_MIN_S = 5;
+const INTERVALO_MAX_S = 600;
+
+let INTERVALO_LECTURA_MS = parseInt(localStorage_fallback_get('intervalo_ms') || '30000', 10);
+let MUESTRAS_ESPERADAS = Math.round(DURACION_PRUEBA_MS / INTERVALO_LECTURA_MS);
+
+let ipArduino = localStorage_fallback_get('ip_arduino') || '';
+let pollTimer = null;
+let conectado = false;
+
+let historico = []; // {t: Date, ppm: number}
+
+let pruebaActiva = false;
+let pruebaTimer = null;
+let pruebaMuestras = []; // {t, ppm}
+let pruebaInicioMs = 0;
+
+// Nota: este entorno de artifacts no admite localStorage real persistente
+// entre sesiones de forma garantizada en todos los contextos, así que
+// usamos un fallback en memoria simple (funciona durante toda la sesión
+// del navegador igual, y si el navegador sí soporta localStorage, lo usa).
+function localStorage_fallback_get(key){
+  try { return window.localStorage.getItem(key); } catch(e){ return window.__memStore?.[key] || null; }
+}
+function localStorage_fallback_set(key, val){
+  try { window.localStorage.setItem(key, val); }
+  catch(e){ window.__memStore = window.__memStore || {}; window.__memStore[key] = val; }
+}
+
+// ============================================================
+// ELEMENTOS DOM
+// ============================================================
+const elInputIp = document.getElementById('inputIp');
+const elBtnConectar = document.getElementById('btnConectar');
+const elPunto = document.getElementById('puntoEstado');
+const elTextoEstado = document.getElementById('textoEstado');
+const elNotaError = document.getElementById('notaError');
+
+const elInputIntervalo = document.getElementById('inputIntervalo');
+const elBtnAplicarIntervalo = document.getElementById('btnAplicarIntervalo');
+const elEstadoIntervalo = document.getElementById('estadoIntervalo');
+const elTextoIntervalo = document.getElementById('textoIntervalo');
+
+const elEtiquetaNivel = document.getElementById('etiquetaNivel');
+const elValorPpm = document.getElementById('valorPpm');
+const elMensajeNivel = document.getElementById('mensajeNivel');
+const elEscalaMarca = document.getElementById('escalaMarca');
+const elGaugeCirculo = document.getElementById('gaugeCirculo');
+
+const elGrafico = document.getElementById('grafico');
+
+const elBtnPrueba = document.getElementById('btnPrueba');
+const elBloqueProgreso = document.getElementById('bloqueProgreso');
+const elMuestraActual = document.getElementById('muestraActual');
+const elTiempoRestante = document.getElementById('tiempoRestante');
+const elBarraFill = document.getElementById('barraFill');
+const elBloqueResultados = document.getElementById('bloqueResultados');
+const elMetricasGrid = document.getElementById('metricasGrid');
+const elDistribucionFilas = document.getElementById('distribucionFilas');
+const elBtnExportar = document.getElementById('btnExportar');
+const elBtnNuevaPrueba = document.getElementById('btnNuevaPrueba');
+
+if (ipArduino) elInputIp.value = ipArduino;
+elInputIntervalo.value = Math.round(INTERVALO_LECTURA_MS / 1000);
+
+// ============================================================
+// CLASIFICACIÓN DE NIVELES (igual que el firmware del TFT)
+// ============================================================
+function clasificar(ppm){
+  if (ppm < 800)  return { key:'excelente', etiqueta:'EXCELENTE', color:'#3fb950', mensaje:'Aire muy fresco' };
+  if (ppm < 1000) return { key:'bueno',     etiqueta:'BUENO',     color:'#3fb950', mensaje:'Aire aceptable' };
+  if (ppm < 1500) return { key:'regular',   etiqueta:'REGULAR',   color:'#d29922', mensaje:'Ventila pronto' };
+  if (ppm < 2000) return { key:'malo',      etiqueta:'MALO',      color:'#db6d28', mensaje:'Ventilar ya' };
+  return                 { key:'peligroso', etiqueta:'PELIGROSO', color:'#f85149', mensaje:'Ventilar ahora' };
+}
+
+const ORDEN_CATEGORIAS = ['excelente','bueno','regular','malo','peligroso'];
+const NOMBRES_CATEGORIAS = {
+  excelente:'Excelente', bueno:'Bueno', regular:'Regular', malo:'Malo', peligroso:'Peligroso'
+};
+const COLOR_CATEGORIAS = {
+  excelente:'#3fb950', bueno:'#3fb950', regular:'#d29922', malo:'#db6d28', peligroso:'#f85149'
+};
+
+// ============================================================
+// CONEXIÓN Y POLLING EN VIVO
+// ============================================================
+elBtnConectar.addEventListener('click', () => {
+  const ip = elInputIp.value.trim();
+  if (!ip){
+    mostrarError('Escribe la IP del Arduino (la ves en su pantalla TFT o en el Monitor Serial).');
+    return;
+  }
+  ipArduino = ip;
+  localStorage_fallback_set('ip_arduino', ip);
+  ocultarError();
+  if (pollTimer) clearInterval(pollTimer);
+  consultarSensor(); // primera consulta inmediata
+  pollTimer = setInterval(consultarSensor, 3000); // refresco de vista cada 3s
+  aplicarIntervaloEnArduino(INTERVALO_LECTURA_MS); // sincroniza el intervalo guardado al conectar
+});
+
+elBtnAplicarIntervalo.addEventListener('click', () => {
+  if (pruebaActiva){
+    mostrarError('No se puede cambiar el intervalo mientras hay una prueba de 1 hora en curso. Deténla primero.');
+    return;
+  }
+
+  let segundos = parseInt(elInputIntervalo.value, 10);
+  if (isNaN(segundos) || segundos < INTERVALO_MIN_S || segundos > INTERVALO_MAX_S){
+    mostrarError(`El intervalo debe estar entre ${INTERVALO_MIN_S} y ${INTERVALO_MAX_S} segundos.`);
+    return;
+  }
+
+  INTERVALO_LECTURA_MS = segundos * 1000;
+  MUESTRAS_ESPERADAS = Math.round(DURACION_PRUEBA_MS / INTERVALO_LECTURA_MS);
+  localStorage_fallback_set('intervalo_ms', String(INTERVALO_LECTURA_MS));
+  ocultarError();
+
+  if (ipArduino && conectado){
+    aplicarIntervaloEnArduino(INTERVALO_LECTURA_MS);
+  } else {
+    mostrarEstadoIntervalo(`Intervalo guardado en ${segundos}s. Se aplicará al sensor cuando te conectes.`);
+  }
+});
+
+async function aplicarIntervaloEnArduino(ms){
+  if (!ipArduino) return;
+  try{
+    const resp = await fetch(`http://${ipArduino}/config?intervalo_ms=${ms}`, { cache: 'no-store' });
+    const data = await resp.json();
+    if (data.estado === 'ok'){
+      mostrarEstadoIntervalo(`Sensor actualizado: ahora muestrea cada ${Math.round(data.intervalo_ms/1000)}s.`);
+    } else if (data.estado === 'fuera_de_rango'){
+      mostrarEstadoIntervalo('El Arduino rechazó ese intervalo (fuera de su rango permitido).');
+    } else {
+      mostrarEstadoIntervalo(`Intervalo actual confirmado en el sensor: ${Math.round(data.intervalo_ms/1000)}s.`);
+    }
+  } catch(err){
+    mostrarEstadoIntervalo('No se pudo confirmar el cambio de intervalo con el Arduino (¿está conectado?).');
+  }
+}
+
+function mostrarEstadoIntervalo(msg){
+  elEstadoIntervalo.style.display = 'block';
+  elTextoIntervalo.textContent = msg;
+}
+
+async function consultarSensor(){
+  if (!ipArduino) return;
+  try{
+    const resp = await fetch(`http://${ipArduino}/data`, { cache: 'no-store' });
+    if (!resp.ok) throw new Error('Respuesta no válida del Arduino');
+    const data = await resp.json();
+    conectado = true;
+    actualizarEstadoConexion(true, data);
+    ocultarError();
+
+    if (data.calentando){
+      elEtiquetaNivel.textContent = 'CALENTANDO SENSOR';
+      elEtiquetaNivel.style.background = '#2a3140';
+      elEtiquetaNivel.style.color = '#d29922';
+      elMensajeNivel.textContent = 'El sensor MH-Z1911A está en fase de calentamiento (hasta 60s).';
+      return;
+    }
+    if (data.error){
+      elMensajeNivel.textContent = 'El Arduino reporta error de lectura del sensor.';
+      return;
+    }
+    if (data.ppm && data.ppm > 0){
+      registrarLectura(data.ppm);
+    }
+  } catch(err){
+    conectado = false;
+    actualizarEstadoConexion(false);
+    mostrarError('No se pudo contactar al Arduino en esa IP. Revisa que esté encendido, conectado a la misma red WiFi, y que la IP sea correcta.');
+  }
+}
+
+function actualizarEstadoConexion(ok, data){
+  if (ok){
+    elPunto.className = 'punto viva';
+    elTextoEstado.textContent = `Conectado a ${ipArduino} · última respuesta hace ${data?.segundos_desde_lectura ?? 0}s`;
+    setTimeout(() => { elPunto.classList.remove('viva'); }, 1200);
+  } else {
+    elPunto.className = 'punto caida';
+    elTextoEstado.textContent = `Sin respuesta de ${ipArduino}`;
+  }
+}
+
+function mostrarError(msg){
+  elNotaError.textContent = msg;
+  elNotaError.classList.add('activa');
+}
+function ocultarError(){
+  elNotaError.classList.remove('activa');
+}
+
+function registrarLectura(ppm){
+  const ahora = new Date();
+  // Evitar duplicar la misma lectura varias veces si el polling de vista
+  // (3s) cae varias veces dentro del mismo ciclo de muestreo del sensor.
+  // Margen proporcional (80% del intervalo) para que funcione con
+  // cualquier frecuencia configurada, no solo con 30s.
+  const margen = Math.max(1000, INTERVALO_LECTURA_MS * 0.8);
+  const ultima = historico[historico.length - 1];
+  if (ultima && ultima.ppm === ppm && (ahora - ultima.t) < margen) {
+    actualizarVistaPpm(ppm); // igual refresca la vista, pero no duplica el histórico
+    return;
+  }
+
+  historico.push({ t: ahora, ppm });
+  if (historico.length > 60) historico.shift(); // ~30 min de histórico visible
+
+  actualizarVistaPpm(ppm);
+  dibujarGrafico();
+
+  if (pruebaActiva){
+    registrarMuestraPrueba(ppm);
+  }
+}
+
+function actualizarVistaPpm(ppm){
+  const info = clasificar(ppm);
+  elValorPpm.textContent = ppm;
+  elEtiquetaNivel.textContent = info.etiqueta;
+  elEtiquetaNivel.style.background = info.color + '22';
+  elEtiquetaNivel.style.color = info.color;
+  elMensajeNivel.textContent = info.mensaje;
+
+  // Marca en la escala (400 a 5000, escala no lineal aprox a la del TFT)
+  const pct = Math.min(100, Math.max(0, ((ppm - 400) / (5000 - 400)) * 100));
+  elEscalaMarca.style.left = pct + '%';
+
+  // Gauge circular: 0 a 5000 ppm sobre 389.6 (2*pi*62)
+  const circunferencia = 389.6;
+  const fraccion = Math.min(1, Math.max(0, ppm / 5000));
+  elGaugeCirculo.style.stroke = info.color;
+  elGaugeCirculo.setAttribute('stroke-dashoffset', circunferencia * (1 - fraccion));
+}
+
+// ============================================================
+// GRÁFICO DE HISTÓRICO (SVG simple, sin librerías)
+// ============================================================
+function dibujarGrafico(){
+  const w = 880, h = 180, padding = 24;
+  if (historico.length < 2){
+    elGrafico.innerHTML = `<text x="${w/2}" y="${h/2}" fill="#8b949e" font-size="13" text-anchor="middle">Esperando más lecturas para graficar…</text>`;
+    return;
+  }
+
+  const valores = historico.map(p => p.ppm);
+  const minV = Math.min(...valores, 400);
+  const maxV = Math.max(...valores, 1000);
+  const rango = maxV - minV || 1;
+
+  const puntos = historico.map((p, i) => {
+    const x = padding + (i / (historico.length - 1)) * (w - padding * 2);
+    const y = h - padding - ((p.ppm - minV) / rango) * (h - padding * 2);
+    return [x, y, p.ppm];
+  });
+
+  const lineaPath = puntos.map((p, i) => (i === 0 ? `M ${p[0]},${p[1]}` : `L ${p[0]},${p[1]}`)).join(' ');
+  const areaPath = lineaPath + ` L ${puntos[puntos.length-1][0]},${h-padding} L ${puntos[0][0]},${h-padding} Z`;
+
+  const ultimoColor = clasificar(valores[valores.length-1]).color;
+
+  let svg = `
+    <defs>
+      <linearGradient id="gradArea" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${ultimoColor}" stop-opacity="0.25"/>
+        <stop offset="100%" stop-color="${ultimoColor}" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <path d="${areaPath}" fill="url(#gradArea)" stroke="none"/>
+    <path d="${lineaPath}" fill="none" stroke="${ultimoColor}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+  `;
+  // punto final destacado
+  const ult = puntos[puntos.length-1];
+  svg += `<circle cx="${ult[0]}" cy="${ult[1]}" r="4" fill="${ultimoColor}"/>`;
+
+  // líneas guía horizontales con etiquetas de valor
+  [minV, (minV+maxV)/2, maxV].forEach(v => {
+    const y = h - padding - ((v - minV) / rango) * (h - padding * 2);
+    svg += `<line x1="${padding}" y1="${y}" x2="${w-padding}" y2="${y}" stroke="#2a3140" stroke-width="1"/>`;
+    svg += `<text x="4" y="${y+4}" fill="#8b949e" font-size="11" font-family="monospace">${Math.round(v)}</text>`;
+  });
+
+  elGrafico.innerHTML = svg;
+}
+
+// ============================================================
+// PRUEBA DE 1 HORA
+// ============================================================
+elBtnPrueba.addEventListener('click', () => {
+  if (!pruebaActiva){
+    if (!ipArduino || !conectado){
+      mostrarError('Conéctate primero al Arduino antes de iniciar la prueba.');
+      return;
+    }
+    iniciarPrueba();
+  } else {
+    detenerPrueba(false);
+  }
+});
+
+function iniciarPrueba(){
+  pruebaActiva = true;
+  pruebaMuestras = [];
+  pruebaInicioMs = Date.now();
+
+  elBtnPrueba.textContent = 'Detener prueba';
+  elBtnPrueba.classList.add('detener');
+  elBloqueProgreso.classList.add('activa');
+  elBloqueResultados.classList.remove('activa');
+  elMuestraActual.textContent = '0';
+  elBarraFill.style.width = '0%';
+
+  actualizarRelojPrueba();
+  pruebaTimer = setInterval(actualizarRelojPrueba, 1000);
+}
+
+function actualizarRelojPrueba(){
+  const transcurrido = Date.now() - pruebaInicioMs;
+  const restante = Math.max(0, DURACION_PRUEBA_MS - transcurrido);
+  const mm = String(Math.floor(restante / 60000)).padStart(2,'0');
+  const ss = String(Math.floor((restante % 60000) / 1000)).padStart(2,'0');
+  elTiempoRestante.textContent = `${mm}:${ss}`;
+  elBarraFill.style.width = Math.min(100, (transcurrido / DURACION_PRUEBA_MS) * 100) + '%';
+
+  if (transcurrido >= DURACION_PRUEBA_MS){
+    detenerPrueba(true);
+  }
+}
+
+function registrarMuestraPrueba(ppm){
+  // evitar registrar la misma muestra varias veces (el polling de vista es cada 3s)
+  const ultima = pruebaMuestras[pruebaMuestras.length - 1];
+  const ahora = Date.now();
+  const margen = Math.max(1000, INTERVALO_LECTURA_MS * 0.8);
+  if (ultima && (ahora - ultima.tMs) < margen) return;
+
+  pruebaMuestras.push({ tMs: ahora, ppm });
+  elMuestraActual.textContent = pruebaMuestras.length;
+}
+
+function detenerPrueba(completada){
+  pruebaActiva = false;
+  clearInterval(pruebaTimer);
+  elBtnPrueba.textContent = 'Iniciar prueba de 1 hora';
+  elBtnPrueba.classList.remove('detener');
+  elBloqueProgreso.classList.remove('activa');
+
+  if (pruebaMuestras.length >= 2){
+    calcularYMostrarMetricas();
+    descargarCsvPrueba(); // guarda automáticamente el CSV de esta prueba
+  } else {
+    mostrarError('La prueba se detuvo sin suficientes muestras para calcular métricas.');
+  }
+}
+
+function calcularYMostrarMetricas(){
+  const valores = pruebaMuestras.map(m => m.ppm);
+  const n = valores.length;
+  const promedio = valores.reduce((a,b) => a+b, 0) / n;
+  const minimo = Math.min(...valores);
+  const maximo = Math.max(...valores);
+  const varianza = valores.reduce((acc, v) => acc + Math.pow(v - promedio, 2), 0) / n;
+  const desviacion = Math.sqrt(varianza);
+
+  // Tendencia: comparar promedio de la primera mitad vs la segunda mitad
+  const mitad = Math.floor(n / 2);
+  const promPrimera = valores.slice(0, mitad).reduce((a,b)=>a+b,0) / Math.max(1, mitad);
+  const promSegunda = valores.slice(mitad).reduce((a,b)=>a+b,0) / Math.max(1, n - mitad);
+  const deltaTendencia = promSegunda - promPrimera;
+  let tendenciaTexto = 'Estable';
+  if (deltaTendencia > 50) tendenciaTexto = `Subiendo (+${Math.round(deltaTendencia)} ppm)`;
+  else if (deltaTendencia < -50) tendenciaTexto = `Bajando (${Math.round(deltaTendencia)} ppm)`;
+
+  // Distribución de tiempo por categoría
+  const conteoCategorias = { excelente:0, bueno:0, regular:0, malo:0, peligroso:0 };
+  valores.forEach(v => { conteoCategorias[clasificar(v).key]++; });
+
+  const duracionRealMin = Math.round((pruebaMuestras[n-1].tMs - pruebaMuestras[0].tMs) / 60000);
+
+  // --- Pintar métricas ---
+  const metricas = [
+    { label:'Promedio', num: Math.round(promedio), sub:'ppm' },
+    { label:'Mínimo', num: minimo, sub:'ppm' },
+    { label:'Máximo', num: maximo, sub:'ppm' },
+    { label:'Desv. estándar', num: Math.round(desviacion), sub:'ppm' },
+    { label:'Muestras', num: n, sub:`de ${MUESTRAS_ESPERADAS} esperadas` },
+    { label:'Duración real', num: duracionRealMin, sub:'minutos' },
+    { label:'Tendencia', num: tendenciaTexto, sub:'1ra vs 2da mitad' },
+  ];
+
+  elMetricasGrid.innerHTML = metricas.map(m => `
+    <div class="metrica">
+      <div class="label">${m.label}</div>
+      <div class="num" style="${typeof m.num === 'string' ? 'font-size:14px;' : ''}">${m.num}</div>
+      <div class="sub">${m.sub}</div>
+    </div>
+  `).join('');
+
+  // --- Pintar distribución ---
+  elDistribucionFilas.innerHTML = ORDEN_CATEGORIAS.map(key => {
+    const pct = Math.round((conteoCategorias[key] / n) * 1000) / 10;
+    return `
+      <div class="dist-fila">
+        <span class="et">${NOMBRES_CATEGORIAS[key]}</span>
+        <span class="barra-mini"><span class="barra-mini-fill" style="width:${pct}%; background:${COLOR_CATEGORIAS[key]}"></span></span>
+        <span class="pct">${pct}%</span>
+      </div>
+    `;
+  }).join('');
+
+  elBloqueResultados.classList.add('activa');
+}
+
+elBtnNuevaPrueba.addEventListener('click', () => {
+  elBloqueResultados.classList.remove('activa');
+  pruebaMuestras = [];
+});
+
+elBtnExportar.addEventListener('click', () => {
+  descargarCsvPrueba();
+});
+
+// Genera y descarga el CSV de la prueba actual. nombreSufijo permite
+// distinguir el archivo automático del que se descarga manualmente despues.
+function descargarCsvPrueba(){
+  if (pruebaMuestras.length === 0) return;
+  let csv = 'timestamp,ppm,categoria,intervalo_configurado_s\n';
+  const intervaloS = Math.round(INTERVALO_LECTURA_MS / 1000);
+  pruebaMuestras.forEach(m => {
+    const fecha = new Date(m.tMs).toISOString();
+    csv += `${fecha},${m.ppm},${clasificar(m.ppm).etiqueta},${intervaloS}\n`;
+  });
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `prueba_co2_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// Si ya hay una IP guardada de una sesión anterior, conectar automáticamente
+if (ipArduino){
+  consultarSensor();
+  pollTimer = setInterval(consultarSensor, 3000);
+}
+</script>
+</body>
+</html>
